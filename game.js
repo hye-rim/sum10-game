@@ -102,12 +102,21 @@ function renderSel() {
 }
 
 // ---------- 입력 ----------
-function cellAt(e) {
-  const bb = board.getBoundingClientRect();
-  const c = Math.min(L.COLS - 1, Math.max(0, Math.floor(((e.clientX - bb.left) / bb.width) * L.COLS)));
-  const r = Math.min(L.ROWS - 1, Math.max(0, Math.floor(((e.clientY - bb.top) / bb.height) * L.ROWS)));
-  return { r, c };
+// 손가락 위치 → 칸의 소수 좌표 (칸 사이 틈까지 계산해서, 판 오른쪽·아래쪽으로 갈수록 한 칸씩 밀리지 않게)
+function cellPos(e) {
+  const els = board.querySelectorAll('.cell');
+  const o = els[0].getBoundingClientRect(), nx = els[1].getBoundingClientRect(), ny = els[L.COLS].getBoundingClientRect();
+  const px = nx.left - o.left, py = ny.top - o.top;                     // 칸 하나가 차지하는 폭·높이 (틈 포함)
+  return { fc: (e.clientX - o.left) / px, fr: (e.clientY - o.top) / py };
 }
+const clampC = (v) => Math.min(L.COLS - 1, Math.max(0, v)), clampR = (v) => Math.min(L.ROWS - 1, Math.max(0, v));
+function cellAt(e) {
+  const p = cellPos(e);
+  return { r: clampR(Math.floor(p.fr)), c: clampC(Math.floor(p.fc)) };
+}
+// 끄는 중에는 칸 경계에서 손가락이 조금 흔들려도 옆 칸으로 튀지 않게, 지금 칸에서 가장자리 쪽으로 STICKY 만큼은 그대로 둔다
+const STICKY = 0.2;
+const stick = (cur, f, max) => (f >= cur - STICKY && f < cur + 1 + STICKY ? cur : Math.min(max, Math.max(0, Math.floor(f))));
 board.addEventListener('pointerdown', (e) => {
   if (phase !== 'play' || busy) return;
   e.preventDefault();
@@ -118,7 +127,8 @@ board.addEventListener('pointerdown', (e) => {
 });
 board.addEventListener('pointermove', (e) => {
   if (!drag) return;
-  const { r, c } = cellAt(e);
+  const p = cellPos(e);
+  const r = stick(drag.r1, p.fr, L.ROWS - 1), c = stick(drag.c1, p.fc, L.COLS - 1);
   if (r === drag.r1 && c === drag.c1) return;
   drag.r1 = r; drag.c1 = c;
   renderSel();
